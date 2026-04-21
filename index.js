@@ -3,13 +3,13 @@ const axios = require("axios");
 // ENV
 const FIREBASE_URL = process.env.FIREBASE_URL;
 
-// LOCATIONS (lat/lon required)
+// LOCATIONS
 const locations = [
   { name: "Anklav", lat: 22.56, lon: 72.95 },
   { name: "Nadiad", lat: 22.69, lon: 72.86 }
 ];
 
-// IST date
+// IST DATE
 function getTodayDateIST() {
   const now = new Date();
   const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
@@ -30,67 +30,61 @@ async function processLocation(location) {
       return;
     }
 
-    // 🔹 CALL OPEN-METEO API (NO KEY)
+    // 🔹 OPEN-METEO API (NO KEY)
     const apiRes = await axios.get(
       `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current=temperature_2m,relative_humidity_2m`
     );
 
     const apiTempC = apiRes.data.current.temperature_2m;
     const apiHumidity = apiRes.data.current.relative_humidity_2m;
-    const apiTempF = apiTempC * 1.8 + 32;
+    const apiTempF = +(apiTempC * 1.8 + 32).toFixed(2);
 
     const keys = Object.keys(data);
 
     for (let key of keys) {
       const d = data[key];
 
-      // 🔹 ONLY TODAY DATA
+      // ✅ ONLY TODAY DATA
       if (d.date_ist !== today) continue;
 
-      // 🔹 CHECK IF ALREADY PROCESSED
+      // ✅ SKIP IF ALREADY EXISTS
       const check = await axios.get(
-        `${FIREBASE_URL}/compared/${location.name}/${key}.json`
+        `${FIREBASE_URL}/compared/${location.name}/${d.date_ist}/${key}.json`
       );
 
       if (check.data !== null) continue;
 
-      // 🔹 DIFFERENCE
-      const diffC = d.temp_c - apiTempC;
-      const diffF = d.temp_f - apiTempF;
-      const diffH = d.humidity - apiHumidity;
+      // ✅ CLEAN DIFFERENCE VALUES
+      const diffC = +(d.temp_c - apiTempC).toFixed(2);
+      const diffF = +(d.temp_f - apiTempF).toFixed(2);
+      const diffH = +(d.humidity - apiHumidity).toFixed(2);
 
-      // 🔹 OUTPUT
+      // 🔥 FINAL FLAT LOG STRUCTURE
       const output = {
         place: location.name,
-        date_ist: d.date_ist,
-        time_ist: d.time_ist,
+        date: d.date_ist,
+        time: d.time_ist,
 
-        sensor: {
-          temp_c: d.temp_c,
-          temp_f: d.temp_f,
-          humidity: d.humidity
-        },
+        sensor_temp_c: d.temp_c,
+        sensor_temp_f: d.temp_f,
+        sensor_humidity: d.humidity,
 
-        api: {
-          temp_c: apiTempC,
-          temp_f: apiTempF,
-          humidity: apiHumidity
-        },
+        api_temp_c: apiTempC,
+        api_temp_f: apiTempF,
+        api_humidity: apiHumidity,
 
-        difference: {
-          temp_c: diffC,
-          temp_f: diffF,
-          humidity: diffH
-        }
+        diff_temp_c: diffC,
+        diff_temp_f: diffF,
+        diff_humidity: diffH
       };
 
-      // 🔹 STORE
+      // ✅ STORE (GROUPED BY DATE)
       await axios.put(
-        `${FIREBASE_URL}/compared/${location.name}/${key}.json`,
+        `${FIREBASE_URL}/compared/${location.name}/${d.date_ist}/${key}.json`,
         output
       );
 
-      console.log(`✔ ${location.name} processed: ${key}`);
+      console.log(`✔ ${location.name} saved: ${key}`);
     }
 
   } catch (err) {
@@ -109,7 +103,7 @@ async function run() {
   console.log("✅ Job finished");
 }
 
-// GitHub Actions friendly
+// GITHUB ACTIONS MODE
 async function main() {
   await run();
   process.exit(0);

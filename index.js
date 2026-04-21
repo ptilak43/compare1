@@ -1,13 +1,12 @@
 const axios = require("axios");
 
-// ENV VARIABLES
+// ENV
 const FIREBASE_URL = process.env.FIREBASE_URL;
-const API_KEY = process.env.API_KEY;
 
-// LOCATIONS
+// LOCATIONS (lat/lon required)
 const locations = [
-  { name: "Anklav", city: "Anand" },
-  { name: "Nadiad", city: "Nadiad" }
+  { name: "Anklav", lat: 22.56, lon: 72.95 },
+  { name: "Nadiad", lat: 22.69, lon: 72.86 }
 ];
 
 // IST date
@@ -22,6 +21,7 @@ async function processLocation(location) {
   try {
     const today = getTodayDateIST();
 
+    // 🔹 GET FIREBASE DATA
     const res = await axios.get(`${FIREBASE_URL}/${location.name}.json`);
     const data = res.data;
 
@@ -30,13 +30,13 @@ async function processLocation(location) {
       return;
     }
 
-    // API CALL (once)
+    // 🔹 CALL OPEN-METEO API (NO KEY)
     const apiRes = await axios.get(
-      `http://api.openweathermap.org/data/2.5/weather?q=${location.city}&appid=${API_KEY}&units=metric`
+      `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current=temperature_2m,relative_humidity_2m`
     );
 
-    const apiTempC = apiRes.data.main.temp;
-    const apiHumidity = apiRes.data.main.humidity;
+    const apiTempC = apiRes.data.current.temperature_2m;
+    const apiHumidity = apiRes.data.current.relative_humidity_2m;
     const apiTempF = apiTempC * 1.8 + 32;
 
     const keys = Object.keys(data);
@@ -44,21 +44,22 @@ async function processLocation(location) {
     for (let key of keys) {
       const d = data[key];
 
-      // only today's data
+      // 🔹 ONLY TODAY DATA
       if (d.date_ist !== today) continue;
 
-      // check duplicate
+      // 🔹 CHECK IF ALREADY PROCESSED
       const check = await axios.get(
         `${FIREBASE_URL}/compared/${location.name}/${key}.json`
       );
 
       if (check.data !== null) continue;
 
-      // difference
+      // 🔹 DIFFERENCE
       const diffC = d.temp_c - apiTempC;
       const diffF = d.temp_f - apiTempF;
       const diffH = d.humidity - apiHumidity;
 
+      // 🔹 OUTPUT
       const output = {
         place: location.name,
         date_ist: d.date_ist,
@@ -83,6 +84,7 @@ async function processLocation(location) {
         }
       };
 
+      // 🔹 STORE
       await axios.put(
         `${FIREBASE_URL}/compared/${location.name}/${key}.json`,
         output
@@ -107,7 +109,7 @@ async function run() {
   console.log("✅ Job finished");
 }
 
-// RUN ONCE (GitHub Actions style)
+// GitHub Actions friendly
 async function main() {
   await run();
   process.exit(0);

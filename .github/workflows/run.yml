@@ -2,7 +2,7 @@ name: Run Weather Processor
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # every 10 minutes
+    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -25,4 +25,3 @@ jobs:
         run: node index.js
         env:
           FIREBASE_URL: ${{ secrets.FIREBASE_URL }}
-          API_KEY: ${{ secrets.API_KEY }}
